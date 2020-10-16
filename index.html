@@ -1,22 +1,219 @@
 <html>
 <head>
-<title>IOT Test</title>
+<title>SSE Test</title>
 <style>
-	#result{
-		width:100%;
-		height:300px;
-		border:red 1px solid;
-	}
+.flex{display:flex}
 </style>
+
+<script src="https://code.highcharts.com/highcharts.js"></script>
+<script src="https://code.highcharts.com/highcharts-more.js"></script>
+<script src="https://code.highcharts.com/modules/solid-gauge.js"></script>
+<script src="https://code.highcharts.com/modules/exporting.js"></script>
+<script src="https://code.highcharts.com/modules/export-data.js"></script>
 </head>
 <body>
 	<h1>SSE TEST</h1>
-	<div id="result"></div>
-	
+	<div class="desc"></div>
+	<div class="flex">
+		<div id="bpm" style="width: 100%; height: 300px; margin: 0 auto"></div>
+		<div id="gauge-bpm" style="width: 400px; height: 300px; margin: 0 auto"></div>
+	</div>
+	<div class="flex">
+		<div id="spog" style="width: 100%; height: 300px; margin: 0 auto"></div>
+		<div id="gauge-spog" style="width: 400px; height: 300px; margin: 0 auto"></div>
+	</div>
 	<script>
+	
+	var groupBy = function(xs, key) {
+		return xs.reduce(function(rv, x) {
+			(rv[x[key]] = rv[x[key]] || []).push(x);
+			return rv;
+		}, {});
+	};
+	
+	var alldata = [];
+	
+	Highcharts.setOptions({
+		credits:false,
+		global: {
+			useUTC: false
+		}
+	});
+	
+	var chartBPM = Highcharts.chart('bpm', {
+		chart: {
+			zoomType: 'x',
+			type:'spline',
+		},
+		title: {
+			text: 'BPM'
+		},
+		xAxis: {
+			type: 'datetime',
+			tickPixelInterval: 150
+		},
+		yAxis: {
+			title: {
+				text: 'BPM'
+			},
+		},
+		legend: {
+			enabled: false
+		},
+		exporting: {
+			enabled: true
+		},
+		series: [{},{},{}]
+	});
+						
+	var chartSPOG = Highcharts.chart('spog', {
+		chart: {
+			zoomType: 'x',
+			type:'spline',
+		},
+		title: {
+			text: 'SPOG'
+		},
+		xAxis: {
+			type: 'datetime',
+			tickPixelInterval: 150
+		},
+		yAxis: {
+			title: {
+				text: 'SPOG'
+			},
+		},
+		legend: {
+			enabled: false
+		},
+		exporting: {
+			enabled: true
+		},
+		series: [{name:null},{},{}]
+	});
+
+	var gaugeBPM = Highcharts.chart('gauge-bpm', {
+    chart: {
+        type: 'solidgauge'
+    },
+		title:false,
+    // the value axis
+    yAxis: {
+        stops: [
+            [0.1, '#55BF3B'], // green
+            [0.5, '#DDDF0D'], // yellow
+            [0.9, '#DF5353'] // red
+        ],
+        lineWidth: 0,
+        tickWidth: 0,
+        minorTickInterval: null,
+        tickAmount: 2,
+        title: {
+            y: -70
+        },
+        min: 0,
+        max: 200,
+        title: {
+            text: 'BPM'
+        }
+    },
+
+    plotOptions: {
+        solidgauge: {
+            dataLabels: {
+							y:-30,
+                borderWidth: 0,
+                useHTML: true
+            }
+        }
+    },
+    series: [{
+        name: 'BPM',
+        data: [0],
+        dataLabels: {
+            format:
+                '<div style="text-align:center;width:100px">' +
+                '<span style="font-size:25px">{y}</span><br/>'  +
+                '</div>'
+        },
+    }]
+
+	});
+	var gaugeSPOG = Highcharts.chart('gauge-spog', {
+    chart: {
+        type: 'solidgauge'
+    },
+		title:false,
+    // the value axis
+    yAxis: {
+        stops: [
+            [0.1, '#55BF3B'], // green
+            [0.5, '#DDDF0D'], // yellow
+            [0.9, '#DF5353'] // red
+        ],
+        lineWidth: 0,
+        tickWidth: 0,
+        minorTickInterval: null,
+        tickAmount: 2,
+        title: {
+            y: -70
+        },
+        min: 0,
+        max: 200,
+        title: {
+            text: 'SPOG'
+        }
+    },
+
+    plotOptions: {
+        solidgauge: {
+            dataLabels: {
+							y:-30,
+                borderWidth: 0,
+                useHTML: true
+            }
+        }
+    },
+    series: [{
+        name: 'SPOG',
+        data: [0],
+        dataLabels: {
+            format:
+                '<div style="text-align:center;width:100px">' +
+                '<span style="font-size:25px">{y}</span><br/>'  +
+                '</div>'
+        },
+    }]
+
+	});
+	
 	var source = new EventSource("api/sse.php");
-	source.onmessage = function(event) {
-	  document.getElementById("result").innerHTML += event.data + "<br>";
+	source.onerror = (err) => console.log(err);
+	source.onmessage = (ev) => {
+		newdata = JSON.parse(ev.data);
+		grupData = groupBy(newdata.rows,'iddevice');
+		grupKey = Object.keys(grupData);
+		grupKey.map((key,i)=>{
+			if(i==0){
+				gaugeBPM.series[0].points[0].update(parseInt(grupData[key][0].bpm));
+				gaugeSPOG.series[0].points[0].update(parseInt(grupData[key][0].spog));
+				grupData[key].forEach(d=>{
+					var x = (new Date(d.timestamp)).getTime();
+					
+					var shift = chartBPM.series[i].data.length > 25;
+					chartBPM.series[i].addPoint([x,parseFloat(d.bpm)],true, shift);
+					
+					var shift = chartSPOG.series[i].data.length > 25;
+					chartSPOG.series[i].addPoint([x,parseFloat(d.spog)],true, shift);
+				});
+			}
+		});
+		//alldata = [...new Set([...alldata ,...newdata.rows.reverse()])];
+	  //document.getElementById("result").innerHTML += `<div>${ev.data}</div>`;
+		
+	  //var $el = document.getElementById("result");
+		//$el.innerHTML = JSON.stringify(alldata,null,2);
+		//$el.scrollTop = $el.scrollHeight
 	};
 </script>
 </body>
